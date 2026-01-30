@@ -1,84 +1,49 @@
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
-from mistralai import Mistral
 
 from defenitions import *
 from question_planner import *
-
+from critic import critic # Импортируем новый модуль
 
 # -------------------------
 # Ask Question
 # -------------------------
 def ask_question(state: InterviewState) -> InterviewState:
-    print(state["current_index"])
     idx = state["current_index"]
 
     if idx >= len(state["questions"]):
         return {}
 
-    question = state["questions"][idx]
-    print(f"\n❓ Вопрос {idx + 1}/{len(state['questions'])}:")
-    print(question)
+    # Если это уточняющий вопрос (approved был False в прошлом шаге)
+    if state.get("critique") and not state.get("approved"):
+        print(f"\n🔍 Уточнение: {state['critique']}")
+    else:
+        print(f"\n❓ Вопрос {idx + 1}/{len(state['questions'])}:")
+        print(state["questions"][idx])
 
     answer = input("👤 Ответ: ")
-
     return {"current_answer": answer}
-
-
-# -------------------------
-# Critic
-# -------------------------
-def critic(state: InterviewState) -> InterviewState:
-    print("\n🔍 Evaluating answer")
-
-    critique = llm(
-        system=(
-            "Ты критик технических ответов.\n"
-            "Если ответ корректный и по существу — напиши 'APPROVED'.\n"
-            "Если нет — укажи, что именно не так."
-        ),
-        user=(
-            f"ВОПРОС:\n{state['questions'][state['current_index']]}\n\n"
-            f"ОТВЕТ:\n{state['current_answer']}"
-        ),
-    )
-
-    approved = "APPROVED" in critique.upper()
-    
-    new_index = state["current_index"]
-    if approved:
-        new_index += 1
-
-    return {
-        "critique": critique,
-        "approved": approved,
-        "current_index": new_index,
-        "history": state["history"]
-        + [{
-            "question": state["questions"][state["current_index"]],
-            "answer": state["current_answer"],
-            "critique": critique,
-        }],
-    }
 
 
 # -------------------------
 # Router
 # -------------------------
 def router(state: InterviewState) -> str:
-    if state["approved"]:
-        print("✅ Ответ принят")
-        if state["current_index"] >= len(state["questions"]):
-            return END
+    # Если мы достигли конца списка вопросов
+    if state["current_index"] >= len(state["questions"]):
+        print("\n🏁 Интервью окончено. Спасибо!")
+        return END
+    
+    # Если ответ был неполный (approved=False), возвращаемся в ask_question
+    # Если ответ был COMPLETE или WRONG (approved=True), идем к следующему вопросу
+    if not state["approved"]:
         return "ask_question"
     else:
-        print("❌ Ответ не принят")
-        print("📌 Комментарий:", state["critique"])
         return "ask_question"
 
 
 # -------------------------
-# Graph
+# Graph Setup
 # -------------------------
 graph = StateGraph(InterviewState)
 
@@ -90,6 +55,7 @@ graph.set_entry_point("plan_questions")
 
 graph.add_edge("plan_questions", "ask_question")
 graph.add_edge("ask_question", "critic")
+
 graph.add_conditional_edges(
     "critic",
     router,
@@ -101,21 +67,13 @@ graph.add_conditional_edges(
 
 app = graph.compile()
 
-
-# -------------------------
-# Run
-# -------------------------
-app.invoke(
-    {
-        "resume": """Backend ML Engineer.
-Разработал модель классификации сообщений клиентов.
-Внедрил RAG-пайплайн.
-Оптимизировал инференс LLM в продакшене.""",
+if __name__ == "__main__":
+    app.invoke({
+        "resume": "Backend ML Engineer. Оптимизировал инференс LLM.",
         "questions": [],
         "current_index": 0,
         "current_answer": "",
         "critique": "",
         "approved": False,
         "history": [],
-    }
-)
+    })
