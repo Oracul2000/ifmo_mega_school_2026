@@ -1,0 +1,18 @@
+[project]
+name = "ifmo-mega-olymp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "faiss-cpu>=1.13.2",
+    "langchain>=1.2.7",
+    "langchain-community>=0.4.1",
+    "langchain-core>=1.2.7",
+    "langchain-mistralai>=1.1.1",
+    "langchain-openai>=1.1.7",
+    "langgraph>=1.0.7",
+    "mistralai>=1.11.1",
+    "sentence-transformers>=5.2.2",
+    "torch>=2.10.0",
+]
