@@ -16,8 +16,8 @@ def ask_question(state: InterviewState) -> InterviewState:
     if idx >= len(state["questions"]):
         return {}
 
-    question = state["questions"][idx + 1]
-    print(f"\n❓ Вопрос {idx + 1}/{len(state['questions']) - 1}:")
+    question = state["questions"][idx]
+    print(f"\n❓ Вопрос {idx + 1}/{len(state['questions'])}:")
     print(question)
 
     answer = input("👤 Ответ: ")
@@ -44,10 +44,15 @@ def critic(state: InterviewState) -> InterviewState:
     )
 
     approved = "APPROVED" in critique.upper()
+    
+    new_index = state["current_index"]
+    if approved:
+        new_index += 1
 
     return {
         "critique": critique,
         "approved": approved,
+        "current_index": new_index,
         "history": state["history"]
         + [{
             "question": state["questions"][state["current_index"]],
@@ -63,11 +68,8 @@ def critic(state: InterviewState) -> InterviewState:
 def router(state: InterviewState) -> str:
     if state["approved"]:
         print("✅ Ответ принят")
-        if state["current_index"] + 1 >= len(state["questions"]):
+        if state["current_index"] >= len(state["questions"]):
             return END
-        print(state['current_index'])
-        state["current_index"] += 1
-        print(state['current_index'])
         return "ask_question"
     else:
         print("❌ Ответ не принят")
