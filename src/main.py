@@ -5,31 +5,42 @@ from critic import critic
 from evaluator import evaluator
 
 def ask_question(state: InterviewState) -> InterviewState:
-    idx = state["current_index"]
+    idx = state.get("current_index", 0)
+    questions = state.get("questions", [])
 
-    if idx >= len(state["questions"]):
+    if idx >= len(questions):
         return {"stop": True}
 
-    if state.get("critique") and not state["approved"]:
-        print(f"\n🔍 Уточнение: {state['critique']}")
+    # Логика отображения вопроса
+    if state.get("critique") and not state.get("approved", True):
+        print(f"\n🔍 Уточнение:\n{state['critique']}")
     else:
         print(f"\n❓ Вопрос {idx + 1}:")
-        print(state["questions"][idx])
+        print(questions[idx])
 
-    answer = input("👤 Ответ: ")
-
+    answer = input("👤 Ответ: ").strip()
+    
+    # Если ввели стоп — выходим немедленно
     if answer.lower().startswith("стоп"):
-        return {"stop": True}
+        print("🛑 Прерывание интервью...")
+        return {"current_answer": "стоп", "stop": True}
 
-    return {"current_answer": answer}
-
+    return {"current_answer": answer, "stop": False}
 
 def router(state: InterviewState) -> str:
-    if state.get("stop") or state["current_index"] >= len(state["questions"]):
+    # 1. Проверяем флаг стоп или пустые вопросы
+    if state.get("stop") or state.get("current_answer", "").lower().startswith("стоп"):
         return "evaluator"
-    return "ask_question"
+    
+    # 2. Если мы пришли сюда из critic и ответ не одобрен — идем на уточнение
+    if state.get("approved") is False:
+        return "ask_question"
+    
+    # 3. Если мы в процессе и нет стопа — двигаемся по кругу
+    # (LangGraph сам поймет, какой узел вызвать следующим по логике графа)
+    return "next"
 
-
+# --- Сборка графа ---
 graph = StateGraph(InterviewState)
 
 graph.add_node("plan_questions", plan_questions)
@@ -39,22 +50,40 @@ graph.add_node("evaluator", evaluator)
 
 graph.set_entry_point("plan_questions")
 graph.add_edge("plan_questions", "ask_question")
-graph.add_edge("ask_question", "critic")
-graph.add_conditional_edges("critic", router)
-graph.add_edge("evaluator", END)
 
+# Условный переход после ввода вопроса
+graph.add_conditional_edges(
+    "ask_question",
+    router,
+    {
+        "evaluator": "evaluator",
+        "next": "critic" # Если не стоп, идем анализировать
+    }
+)
+
+# Условный переход после анализа критика
+graph.add_conditional_edges(
+    "critic",
+    router,
+    {
+        "evaluator": "evaluator",
+        "next": "ask_question" # После критика возвращаемся за новым вопросом (или уточнением)
+    }
+)
+
+graph.add_edge("evaluator", END)
 app = graph.compile()
 
 if __name__ == "__main__":
     app.invoke({
-        "resume": "Backend ML Engineer. Оптимизировал инференс LLM.",
+        "resume": "Алекс. Backend Developer. Senior / Team Lead. Более 7 лет, эксперт. Уверенный в себе, требовательный",
         "questions": [],
         "current_index": 0,
         "current_answer": "",
         "critique": "",
         "approved": True,
         "history": [],
+        "stop": False, # Обязательно инициализируем
         "internal_thoughts": "",
-        "difficulty": 1,
         "final_feedback": "",
     })

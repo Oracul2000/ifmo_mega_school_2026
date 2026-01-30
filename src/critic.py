@@ -31,6 +31,9 @@ CRITIC_PROMPT = """
 def critic(state: InterviewState) -> InterviewState:
     question = state["questions"][state["current_index"]]
     answer = state["current_answer"]
+    
+    if state.get("stop") or answer.lower().startswith("стоп"):
+        return state
 
     response = llm(
         system=CRITIC_PROMPT.format(
